@@ -214,7 +214,6 @@ plot2 <- plot + labs(title = "Evolution of the Mode of Transmission")
 
 plot3<- plot2 + scale_color_discrete(name = "", labels = c("Community Transmission","Travel-Related","Close Contact"))
 
-
 plot3 + theme(axis.text=element_text(size=12, face = "bold"),axis.title=element_text(size=14,face="bold"),plot.title= element_text(size=16, face="bold"))
 ```
 Counties
