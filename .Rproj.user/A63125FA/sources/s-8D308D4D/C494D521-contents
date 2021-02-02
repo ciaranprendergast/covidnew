@@ -1,0 +1,580 @@
+---
+title: "Code to run website graphs from already available data sources"
+output:
+  html_document:
+    df_print: paged
+---
+1:Progession of Covid over Time
+
+
+```{r}
+
+rm(list=ls())
+library(ggplot2)
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$Date)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+
+the.date <- data1$Date[n]
+
+total_cases <- as.numeric(data1$TotalConfirmedCovidCases)
+
+data1$newcases[1] <- NA
+if (n > 1) for(i in 2:n) data1$newcases[i] <- ( total_cases[i] - total_cases[i-1] )
+
+data1$newcases_per[1] <- NA
+if (n > 1) for(i in 2:n) data1$newcases_per[i] <- ( 100*(total_cases[i] - total_cases[i-1])/total_cases[i-1] )
+
+
+df <- data.frame(data1$newcases_per,data1$Date,total_cases)
+
+
+
+ylim.prim <- c(0, 60)   
+ylim.sec <- c(0, 18000)  
+
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- b*(ylim.prim[1] - ylim.sec[1])
+
+plot <- ggplot(df, aes(data1.Date)) +
+  geom_col(aes(y = data1.newcases_per, color="tomoto4")) +
+  geom_line(aes(y = a + total_cases*b, color="darkblue")) +
+  scale_y_continuous("% Increase on Total", sec.axis = sec_axis(~ (. - a)/b, name = "Total Cases")) +
+  scale_x_date("Dates") +
+  ggtitle("Progression of Covid-19 in Ireland") 
+
+
+plot2 <- plot + scale_color_discrete(name = "", labels = c("Total Cases", "% Increase on Total") )
+
+
+plot2 + theme(legend.key = element_rect(fill = "lightblue", color = NA), axis.text=element_text(size=12, face = "bold"),
+              axis.title=element_text(size=14,face="bold"), plot.title = element_text(size=16, face = "bold"))
+
+
+
+
+
+```
+
+
+2: Cases by Age
+```{r}
+
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+the.date <- data1$Date[n]
+age_population_cso <- read.csv("https://raw.githubusercontent.com/frankmoriarty/covid_ie/master/age_population_cso_2019.csv")
+
+
+totalllcases <- as.numeric(data1$TotalConfirmedCovidCases)
+age <- c("0-4","05-14","15-24","25-34","35-44","45-54","55-64","65+")
+
+
+cases <- as.numeric(c(data1$Aged1to4[which(data1$Date == the.date )],
+                      data1$Aged5to14[which(data1$Date == the.date )],
+                      data1$Aged15to24[which(data1$Date == the.date )],
+                      data1$Aged25to34[which(data1$Date == the.date )],
+                      data1$Aged35to44[which(data1$Date == the.date )],
+                      data1$Aged45to54[which(data1$Date == the.date )],
+                      data1$Aged55to64[which(data1$Date == the.date )],
+                      data1$Aged65up[which(data1$Date == the.date )]))
+
+#the cases by age all as numeric
+
+
+popcso<- age_population_cso$pop_estimate[c(1:7,11)]      #the population estimates  
+
+
+popcso.dividedbymillion <- popcso/1000000          #the population estimates divided by million as per formula in notebook
+
+
+
+cases1M <- cases/popcso.dividedbymillion         #this gives a string of the cases per one million by age
+
+df <- data.frame(age,cases1M)
+
+the.plot <- ggplot(data=df, aes(x= age, y=cases1M,fill="indianred4", color="indianred4")) + geom_bar(stat='identity') 
+
+
+
+
+total.cases <-totalllcases[which(data1$Date == the.date )]  #this gives the total cases on the date
+
+totalpop.dividedby1m <- (age_population_cso$pop_estimate[which(age_population_cso$age_group=='cases_all_ages')])/1000000
+
+mean.cases1M<- as.numeric(total.cases)/as.numeric(totalpop.dividedby1m)   #this is population mean for average abline
+
+
+total.cases15plus <- totalllcases[which(data1$Date == the.date )] -  (( data1$Aged1to4[which(data1$Date == the.date )]+               data1$Aged5to14[which(data1$Date == the.date )])) #this gave the total amount of cases 15 plus
+
+pop15plus.dividedby1M <- (age_population_cso$pop_estimate[which(age_population_cso$age_group=='cases_age_15_plus')])/1000000    #this was the population 15 plus divided by 1 million as per formula in notebook
+
+mean.cases15plus1M <- total.cases15plus/pop15plus.dividedby1M  #this shows the total cases 15 plus per 1 million people
+
+
+
+plot2 <- the.plot + scale_color_manual(values="indianred4",guide=FALSE)+scale_fill_manual(values="indianred4", guide=FALSE)
+
+
+
+
+
+
+plot3 <- plot2 +geom_hline(aes(yintercept= mean.cases15plus1M, linetype = "Mean 15-plus"), colour= "green", size=1.25) +
+  geom_hline(aes(yintercept=mean.cases1M , linetype = "Mean Total Population"), colour= "yellow", size=1.25) +
+  scale_linetype_manual(name = "", values = c(2, 2), 
+                        guide = guide_legend(override.aes = list(color = c("green", "yellow"))))
+plot4 <- plot3 + labs(title= "Confirmed Covid Cases by Age",y= "Cases per Million", x = "Age-groups (Yr)")
+
+plot4 +theme(legend.key = element_rect(fill = "lightblue", color = NA), axis.text=element_text(size=8, face = "bold"),
+             axis.title=element_text(size=14,face="bold"), plot.title = element_text(size=16, face = "bold"))
+
+
+```
+Who has been hospitalised?
+
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+the.date <- data1$Date[n]
+
+age <- c(rep("0-5",2), rep("05-14",2),rep("15-24",2),rep("25-34",2),rep("35-44",2),rep("45-54",2),rep("55-64",2),rep("65+",2))
+
+
+hospital <- rep(c("Yes", "No"), 8)
+
+
+value <- c(data1$Aged1to4[which(data1$Date == the.date )] -data1$HospitalisedAged5[which(data1$Date == the.date )], data1$HospitalisedAged5[which(data1$Date == the.date )], data1$Aged5to14[which(data1$Date == the.date )] - data1$HospitalisedAged5to14[which(data1$Date == the.date )], data1$HospitalisedAged5to14[which(data1$Date == the.date )],
+data1$Aged15to24[which(data1$Date == the.date )] - data1$HospitalisedAged15to24[which(data1$Date == the.date )],data1$HospitalisedAged15to24[which(data1$Date == the.date )], data1$Aged25to34[which(data1$Date == the.date )] - data1$HospitalisedAged25to34[which(data1$Date == the.date )],data1$HospitalisedAged25to34[which(data1$Date == the.date )],
+data1$Aged35to44[which(data1$Date == the.date )] - data1$HospitalisedAged35to44[which(data1$Date == the.date )],data1$HospitalisedAged35to44[which(data1$Date == the.date )],
+data1$Aged45to54[which(data1$Date == the.date )] - data1$HospitalisedAged45to54[which(data1$Date == the.date )],data1$HospitalisedAged45to54[which(data1$Date == the.date )],
+data1$Aged55to64[which(data1$Date == the.date )] - data1$HospitalisedAged55to64[which(data1$Date == the.date )],data1$HospitalisedAged55to64[which(data1$Date == the.date )],
+data1$Aged65up[which(data1$Date == the.date )] - data1$HospitalisedAged65up[which(data1$Date == the.date )],data1$HospitalisedAged65up[which(data1$Date == the.date )])
+
+datas <- data.frame(age,hospital,value)
+
+graph<- ggplot(datas, aes(fill= hospital, y=value, x=age)) + geom_bar(position="stack", stat="identity") + scale_fill_manual(name="", breaks=c("No", "Yes"), labels=c("Hospitalised", "Not Hospitalised"), values=c("tomato4", "indianred1"))
+
+
+graph1 <- graph + ggtitle("Hospitalisation By Age") + theme(plot.title = element_text(hjust = 0.5,lineheight=.8, face="bold"))
+
+
+
+
+graph2 <- graph1 + scale_x_discrete(name="Age Group") + scale_y_continuous(name="Cumulative Total")
+
+
+graph3 <-graph2 + theme(axis.title.y =  element_text(face="bold"), axis.title.x = element_text(face="bold"), axis.text.x  = element_text(face = "bold"), axis.text.y = element_text(face="bold"))
+
+
+graph3 +theme(axis.text=element_text(size=10, face = "bold"),
+              axis.title=element_text(size=14,face="bold"), plot.title = element_text(size=16, face = "bold"))
+
+
+
+```
+Mode of Transmission
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$Date)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+the.date <- data1$Date[n]
+
+library(ggplot2)
+library(scales)
+library(tidyverse)
+
+dataf <- data.frame(data1$Date,data1$CommunityTransmission,data1$CloseContact,data1$TravelAbroad)
+
+
+plot <- ggplot(dataf, aes(data1.Date, data1.CommunityTransmission)) +
+  geom_line(aes(color="tomato4")) +
+  geom_line(aes(y = data1.CloseContact, color = "blue"))+
+  geom_line(aes(y = data1$TravelAbroad, color = "green"))+
+  xlab("Date")+ ylab("Percentage of Cases")
+  
+
+  
+
+plot2 <- plot + labs(title = "Evolution of the Mode of Transmission")
+ 
+
+plot3<- plot2 + scale_color_discrete(name = "", labels = c("Community Transmission","Travel-Related","Close Contact"))
+
+
+plot3 + theme(axis.text=element_text(size=12, face = "bold"),axis.title=element_text(size=14,face="bold"),plot.title= element_text(size=16, face="bold"))
+```
+Counties
+
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d9be85b30d7748b5b7c09450b8aede63_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$TimeStamp)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+the.date <- data1$Date[n]
+
+library(sf)
+library(tidyverse)
+library(raster)
+library(dplyr)
+library(spData)
+library(tmap)
+library(csodata)
+
+shp <- cso_get_geo("ac")
+
+a<- data.frame(data1$Date, data1$CountyName, data1$ConfirmedCovidCases)
+b <- reshape(a, direction="wide", idvar="data1.Date", timevar="data1.CountyName")
+
+
+
+counties_start <- grep("data1.ConfirmedCovidCases.Carlow", colnames(b))
+counties_stop <- grep("data1.ConfirmedCovidCases.Wicklow", colnames(b))
+
+counties <- tibble(b[which(b$data1.Date == the.date ), counties_start:counties_stop])
+
+
+
+cso <- read.csv("https://raw.githubusercontent.com/frankmoriarty/covid_ie/master/counties_population_cso_2016.csv")
+
+counties <- data.frame(r1=names(counties), t(counties))
+colnames(counties)[2] <- "cases"
+colnames(counties)[1] <- "county_doh"
+
+counties$county_doh <- substring(counties$county_doh,27)
+counties$county_doh <- tolower(counties$county_doh)
+ 
+
+
+counties$cases <- as.numeric(as.character(counties$cases))
+counties[,1] <- sub("cases_", "", counties[,1])
+counties$cases <- as.numeric(counties$cases)
+
+county_cases <- merge(cso, counties, by="county_doh")
+
+
+county_cases$cases_per_mil <- 1000000*county_cases$cases/county_cases$pop
+
+names(shp)[8] <- "county"
+shp$county[20]="Dun Laoghaire-Rathdown"
+county_cases$county[8]="Dun Laoghaire-Rathdown"
+
+merged_cases <- merge(shp, county_cases, by="county")
+
+tm_shape(merged_cases) + tm_fill(col="cases_per_mil", style = "pretty", title=c(paste("Cases per million", the.date))) + tm_borders() + tm_layout(asp = 1.28)
+
+```
+
+Hospitalisation over time
+
+
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$Date)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+the.date <- data1$Date[n]
+
+data1$newhosp[1] <- NA
+if (n > 1) for(i in 2:n) data1$newhosp[i] <- ( data1$HospitalisedCovidCases[i] - data1$HospitalisedCovidCases[i-1] )
+
+data1$newhosp_per[1] <- NA
+if (n > 1) for(i in 2:n) data1$newhosp_per[i] <- ( 100*(data1$HospitalisedCovidCases[i] - data1$HospitalisedCovidCases[i-1])/data1$HospitalisedCovidCases[i-1] )
+
+newhosp <- as.numeric(data1$newhosp)
+newhosp_per <- as.numeric(data1$newhosp_per)
+
+df <- data.frame(newhosp_per,data1$Date,newhosp)
+
+ylim.prim <- c(0, 50)   
+ylim.sec <- c(0, 250)
+
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- b*(ylim.prim[1] - ylim.sec[1])
+
+
+library(ggplot2)
+plot <- ggplot(df, aes(data1.Date)) +
+  geom_col(aes(y=newhosp_per, color ="red")) +
+  geom_line(aes(y = a + newhosp*b, color = "blue")) +
+  scale_y_continuous("% Increase on Total", sec.axis = sec_axis(~ (. - a)/b, name = "Daily Admissions")) +
+  scale_x_date("Dates") +
+  ggtitle("Covid-related Hospital Admissions in Ireland")
+
+plot2 <- plot + scale_color_discrete(name = "", labels = c("Daily Admissions","% Increase on Total"))
+
+
+plot2 + theme(axis.text=element_text(size=12, face = "bold"),
+              axis.title=element_text(size=14,face="bold"), plot.title = element_text(size=16, face = "bold"))
+
+
+
+```
+
+  
+  
+ICU Admissions
+
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$Date)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+the.date <- data1$Date[n]
+
+
+#dervives column of new icu cases
+data1$newicu[1] <- NA
+if (n > 1) for(i in 2:n) data1$newicu[i] <- ( data1$RequiringICUCovidCases[i] - data1$RequiringICUCovidCases[i-1] )
+
+#percentage of new cases
+data1$newicu_per[1] <- NA
+if (n > 1) for(i in 2:n) data1$newicu_per[i] <- ( 100*(data1$RequiringICUCovidCases[i] - data1$RequiringICUCovidCases[i-1])/data1$RequiringICUCovidCases[i-1] )
+
+newicu <- as.numeric(data1$newicu)
+newicu_per <- as.numeric(data1$newicu_per)
+
+df <- data.frame(newicu_per,data1$Date,newicu)
+
+ylim.prim <- c(0, 80)   
+ylim.sec <- c(0, 50)
+
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- b*(ylim.prim[1] - ylim.sec[1])
+
+plot <- ggplot(df, aes(data1.Date)) +
+  geom_col(aes(y= newicu_per, color ="red")) +
+  geom_line(aes(y = a + newicu*b, color = "blue")) +
+  scale_y_continuous("% Increase on Total", sec.axis = sec_axis(~ (. - a)/b, name = "Daily Admissions")) +
+  scale_x_date("Dates") +
+  ggtitle("ICU Admissions in Ireland")
+
+plot2 <- plot + scale_color_discrete(name = "", labels = c("Daily Admissions", "% Increase on Total")) +
+  scale_fill_discrete(name = "", labels = "Increase on Total")
+
+plot2 + theme(axis.text=element_text(size=12, face = "bold"),
+              axis.title=element_text(size=14,face="bold"), plot.title = element_text(size=16, face = "bold"))
+
+
+```
+
+5 day running average
+
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$Date)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+the.date <- data1$Date[n]
+
+library(zoo)
+library(ggplot2)
+library(lubridate)
+library(scales)
+
+data1$newcases[1] <- NA
+if (n > 1) for(i in 2:n) data1$newcases[i] <- ( data1$TotalConfirmedCovidCases[i] - data1$TotalConfirmedCovidCases[i-1] )
+
+#gives rolling mean over 5 days
+data1$cases_5d <- rollmeanr(data1$newcases, 5, fill=NA)
+
+data1$cases_5d_off[1] <- NA
+if (n > 15) for(i in 16:n) data1$cases_5d_off[i] <- data1$cases_5d[i-15]
+
+
+
+
+plot <- ggplot (data1[(n-14):n,], aes(x=Date)) + 
+  geom_line(aes(y=cases_5d, color = "red"),size=1.2) +
+  geom_line(aes(y=cases_5d_off, color="blue"),size=1,linetype = "dashed") +
+  scale_color_manual(values = c("blue","red"), name = "", labels = c("Previous Fortnight", "Last Fortnight")) +
+  scale_x_date("Date",breaks = pretty_breaks(10))+
+  scale_y_continuous("New daily cases (5-day average)")+
+  theme(legend.key = element_rect(fill = "lightblue", color = NA), axis.text=element_text(size=10, face = "bold"),
+        axis.title=element_text(size=14,face="bold"), plot.title = element_text(size=16, face = "bold")) +
+  scale_linetype(guide=FALSE) +
+  scale_size(guide=FALSE)+
+  guides(fill = guide_legend(reverse = TRUE))
+  
+
+plot
+
+```
+Age last 2 weeks
+
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d8eb52d56273413b84b0187a4e9117be_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$Date)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+the.date <- data1$Date[n]
+
+library(tidyverse)
+library(viridis)
+library(lubridate)
+
+age_population_cso <- read.csv("https://raw.githubusercontent.com/frankmoriarty/covid_ie/master/age_population_cso_2019.csv")
+
+totalllcases <- as.numeric(data1$TotalConfirmedCovidCases)
+age <- c("0-4","05-14","15-24","25-34","35-44","45-54","55-64","65+")
+
+cases <- as.numeric(c(data1$Aged1to4[which(data1$Date == the.date )] - data1$Aged1to4[which(data1$Date == the.date -14 )] ,  data1$Aged5to14[which(data1$Date == the.date )] - data1$Aged5to14[which(data1$Date == the.date -14 )], 
+data1$Aged15to24[which(data1$Date == the.date )] - data1$Aged15to24[which(data1$Date == the.date - 14 )], data1$Aged25to34[which(data1$Date == the.date )] - data1$Aged25to34[which(data1$Date == the.date - 14 )],
+data1$Aged35to44[which(data1$Date == the.date )] - data1$Aged35to44[which(data1$Date == the.date - 14 )],
+data1$Aged45to54[which(data1$Date == the.date )] - data1$Aged45to54[which(data1$Date == the.date -14 )],
+data1$Aged55to64[which(data1$Date == the.date )] - data1$Aged55to64[which(data1$Date == the.date - 14 )],
+data1$Aged65up[which(data1$Date == the.date )] - data1$Aged65up[which(data1$Date == the.date - 14 )] ))
+
+
+
+#the cases by age all as numeric
+
+popcso<- age_population_cso$pop_estimate[c(1:7,11)]      #the population estimates  
+
+
+
+popcso.dividedbymillion <- popcso/1000000          #the population estimates divided by million as per formula in notebook
+
+
+
+cases1M <- cases/popcso.dividedbymillion         #this gives a string of the cases per one million by age
+
+df <- data.frame(age,cases1M)
+
+the.plot <- ggplot(data=df, aes(x= age, y=cases1M,fill= age)) + geom_bar(stat='identity') +
+  scale_fill_viridis(option = "D", discrete = TRUE, guide= FALSE)
+
+
+
+
+total.cases <- (totalllcases[which(data1$Date == the.date )] - totalllcases[which(data1$Date == the.date -14 )]) #this gives the total cases on the date
+
+totalpop.dividedby1m <- (age_population_cso$pop_estimate[which(age_population_cso$age_group=='cases_all_ages')])/1000000
+
+mean.cases1M<- as.numeric(total.cases)/as.numeric(totalpop.dividedby1m)   #this is population mean for average abline
+
+
+total.cases15plus <- (totalllcases[which(data1$Date == the.date )]-totalllcases[which(data1$Date == the.date - 14 )])-  ((data1$Aged1to4[which(data1$Date == the.date )]-data1$Aged1to4[which(data1$Date == the.date - 14 )])+               (data1$Aged5to14[which(data1$Date == the.date )] - data1$Aged5to14[which(data1$Date == the.date - 14 )])) #this gave the total amount of cases 15 plus
+
+
+pop15plus.dividedby1M <- (age_population_cso$pop_estimate[which(age_population_cso$age_group=='cases_age_15_plus')])/1000000    #this was the population 15 plus divided by 1 million as per formula in notebook
+
+mean.cases15plus1M <- total.cases15plus/pop15plus.dividedby1M  #this shows the total cases 15 plus per 1 million people
+
+
+plot2 <- the.plot +geom_hline(aes(yintercept= mean.cases15plus1M, linetype = "Mean 15-plus"), colour= "green", size=1.25) +
+  geom_hline(aes(yintercept=mean.cases1M , linetype = "Mean Total Population"), colour= "yellow", size=1.25) +
+  scale_linetype_manual(name = "", values = c(2, 2), 
+                        guide = guide_legend(override.aes = list(color = c("green", "yellow"))))
+plot3 <- plot2 + labs(title= "Cases by Age over last 2 Weeks",y= "Cases per Million", x = "Age-groups (Yr)")
+
+
+plot3 +theme(legend.key = element_rect(fill = "lightblue", color = NA), axis.text=element_text(size=8, face = "bold"),
+             axis.title=element_text(size=14,face="bold"), plot.title = element_text(size=16, face = "bold"))
+
+```
+
+```{r}
+rm(list=ls())
+data1 <- read.csv("https://opendata-geohive.hub.arcgis.com/datasets/d9be85b30d7748b5b7c09450b8aede63_0.csv?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D")
+cso <- read.csv("https://raw.githubusercontent.com/frankmoriarty/covid_ie/master/counties_population_cso_2016.csv")
+
+n <- nrow(data1)
+
+data1$Date <- as.character(data1$TimeStamp)
+data1$Date <- substr(data1$Date, 1, 10)
+data1$Date <- as.Date(data1$Date, "%Y/%m/%d")
+the.date <- data1$Date[n]
+
+
+library(sf)
+library(tidyverse)
+library(raster)
+library(dplyr)
+library(spData)
+library(tmap)    # for static and interactive maps
+library(csodata)
+
+shp <- cso_get_geo("ac")
+a<- data.frame(data1$Date, data1$CountyName, data1$ConfirmedCovidCases)
+b <- reshape(a, direction="wide", idvar="data1.Date", timevar="data1.CountyName")
+
+
+
+counties_start <- grep("data1.ConfirmedCovidCases.Carlow", colnames(b))
+counties_stop <- grep("data1.ConfirmedCovidCases.Wicklow", colnames(b))
+
+#kept last 14 days
+counties <- tibble(b[which(b$data1.Date >= the.date -14 ), counties_start:counties_stop])
+counties1 <- as.data.frame(counties)
+N<- nrow(counties1)
+
+counties1<- sapply(counties1,as.numeric)
+counties2 <- counties1[N,] - counties1[N-13,]
+
+counties3 <- data.frame(t(counties2[]))
+
+counties3 <- data.frame(r1=names(counties3), t(counties3))
+colnames(counties3)[2] <- "cases"
+colnames(counties3)[1] <- "county_doh"
+
+counties3$county_doh <- substring(counties3$county_doh,27)
+counties3$county_doh <- tolower(counties3$county_doh)
+ 
+
+
+
+counties3[,1] <- sub("cases_", "", counties3[,1])
+counties3$cases <- as.numeric(counties3$cases)
+
+
+
+county_cases <- merge(cso, counties3, by="county_doh")
+
+county_cases$cases_per_mil <- 1000000*county_cases$cases/county_cases$pop
+
+names(shp)[8] <- "county"
+shp$county[20]="Dun Laoghaire-Rathdown"
+county_cases$county[8]="Dun Laoghaire-Rathdown"
+
+merged_cases <- merge(shp, county_cases, by="county")
+
+tm_shape(merged_cases) + tm_fill(col="cases_per_mil", style = "pretty", title=c(paste("Cases per million", the.date))) + tm_borders() + tm_layout(asp = 1.28)
+
+                                 
+
+
+```
